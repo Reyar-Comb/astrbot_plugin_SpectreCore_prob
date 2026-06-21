@@ -69,6 +69,7 @@ class SpectreCore(Star):
                     return
                 
                 await HistoryStorage.save_bot_message_from_chain(event._result.chain, event)
+                ReplyDecision.record_bot_message_sent(event, event._result.chain)
                 logger.debug(f"已保存bot回复消息到历史记录")
                 
         except Exception as e:

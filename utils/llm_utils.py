@@ -202,6 +202,53 @@ class LLMUtils:
                     logger.warning(f"为 {platform_name} 获取群组信息失败: {e}")
             env_description += f"，你正在群聊 {group_display_name} 中。"
 
+        current_sender_id = str(event.get_sender_id() or "unknown")
+        current_sender_name = event.get_sender_name() or "未知用户"
+        env_description += f"\n当前你正在回复的新消息来自: {current_sender_name} (ID: {current_sender_id})。"
+
+        allow_no_response_for_context = False
+        wakeup_trigger_message = False
+        try:
+            from .reply_decision import ReplyDecision
+            wakeup_context = ReplyDecision.get_wakeup_context(event)
+            if wakeup_context:
+                wakeup_trigger_message = bool(wakeup_context.get("is_trigger_message"))
+                if not wakeup_trigger_message:
+                    allow_no_response_for_context = True
+                wakeup_message = str(wakeup_context.get("message_text", "")).strip()
+                if len(wakeup_message) > 200:
+                    wakeup_message = wakeup_message[:200] + "..."
+                if wakeup_trigger_message:
+                    env_description += (
+                        "\n当前消息包含唤醒词。"
+                        "请直接处理这条消息中唤醒词后面的请求或意图。"
+                    )
+                else:
+                    env_description += (
+                        "\n最近同一用户用唤醒词叫过你。"
+                        f"唤醒消息是: {wakeup_message}"
+                        "\n当前消息可能仍然是在补充或延续这个请求，也可能已经切换到了新话题。"
+                        "请结合当前消息和聊天记录判断，不要强行把无关内容解释成同一个请求。"
+                    )
+
+            smart_config = config.get("model_frequency", {}).get("smart_probability", {})
+            bot_followup_window = int(smart_config.get("bot_followup_window_seconds", 180))
+            bot_context = ReplyDecision.get_recent_bot_context(event, bot_followup_window)
+            if bot_context:
+                if not wakeup_trigger_message:
+                    allow_no_response_for_context = True
+                bot_message = str(bot_context.get("message_text", "")).strip()
+                if len(bot_message) > 200:
+                    bot_message = bot_message[:200] + "..."
+                env_description += (
+                    "\n你刚刚在这个群里发过一条消息。"
+                    f"你的上一条消息是: {bot_message}"
+                    "\n当前消息可能是在回应你刚才的话，也可能只是群友切换到了别的话题。"
+                    "请结合上下文判断，不要因为自己刚发过言就强行接话。"
+                )
+        except Exception as e:
+            logger.debug(f"获取轻量上下文失败: {e}")
+
         # 添加历史记录（文本格式，注入到 system_prompt）
         # 注意：基于 message_id 精确排除当前消息，避免重复
         history_limit = config.get("group_msg_history", 10)
@@ -233,6 +280,8 @@ class LLMUtils:
 
         if config.get("read_air", False):
             env_description += "\n\n现在你收到了一条新消息，你的反应是:\n(如果你想发送一条消息，直接输出发送的内容，如果你选择忽略，直接输出<NO_RESPONSE>)"
+        elif allow_no_response_for_context:
+            env_description += "\n\n现在你收到了一条可能与你有关的新消息。如果它仍在延续当前请求或回应你刚才的话，直接输出要发送的内容；如果它已经切换话题、与你无关或不需要你接话，直接输出<NO_RESPONSE>。"
         else:
             env_description += "\n\n现在你收到了一条新消息，你决定发送一条消息回复(你输出的内容将作为消息发送)"
 
