@@ -44,6 +44,10 @@ class ReplyDecision:
             if mute_info and mute_info.get("until", 0) > time.time():
                 logger.debug(f"当前处于临时静默状态，不进行回复")
                 return False
+
+            if config.get("image_processing", {}).get("ignore_images", True) and ReplyDecision._has_image(event):
+                logger.debug("消息中包含图片，已按配置忽略，不进行回复")
+                return False
                 
             # 检查消息是否包含黑名单关键词
             blacklist_keywords = config.get("model_frequency", {}).get("blacklist_keywords", [])
@@ -345,6 +349,16 @@ class ReplyDecision:
             if keyword in message_text:
                 return True
                 
+        return False
+
+    @staticmethod
+    def _has_image(event: AstrMessageEvent) -> bool:
+        message_obj = getattr(event, "message_obj", None)
+        message_chain = getattr(message_obj, "message", []) if message_obj else []
+        for component in message_chain:
+            component_type = getattr(component, "type", None) or component.__class__.__name__.lower()
+            if component_type == "image" or isinstance(component, Image):
+                return True
         return False
 
     @staticmethod

@@ -111,6 +111,7 @@ class LLMUtils:
         platform_name = event.get_platform_name()
         is_private = event.is_private_chat()
         chat_id = event.get_group_id() if not is_private else event.get_sender_id()
+        ignore_images = config.get("image_processing", {}).get("ignore_images", True)
 
         # 准备并调用大模型
         func_tools_mgr = context.get_llm_tool_manager() if config.get("use_func_tool", False) else None
@@ -264,7 +265,7 @@ class LLMUtils:
                     # 回退到排除最后一条
                     history_for_context = history_messages[:-1] if len(history_messages) > 1 else []
                 if history_for_context:
-                    formatted_history = await MessageUtils.format_history_for_llm(history_for_context, max_messages=history_limit, umo=umo)
+                    formatted_history = await MessageUtils.format_history_for_llm(history_for_context, max_messages=history_limit, umo=umo, ignore_images=ignore_images)
                     env_description += "\n\n以下是最近的聊天记录：\n" + formatted_history
                 else:
                     env_description += "\n\n你没看见任何聊天记录，看来最近没有消息。"
@@ -292,7 +293,7 @@ class LLMUtils:
         image_urls = []
 
         # 首先收集当前消息链中的图片（用户刚发送的，不受 image_count 限制）
-        if hasattr(event, "message_obj") and hasattr(event.message_obj, "message"):
+        if not ignore_images and hasattr(event, "message_obj") and hasattr(event.message_obj, "message"):
             for component in event.message_obj.message:
                 if isinstance(component, Image):
                     try:
@@ -305,7 +306,7 @@ class LLMUtils:
 
         # 然后从历史消息中补充收集图片（受 image_count 限制）
         history_image_count = config.get("image_processing", {}).get("image_count", 0)
-        if history_image_count and history_messages:
+        if not ignore_images and history_image_count and history_messages:
             messages_to_show = history_messages[-history_limit:] if len(history_messages) > history_limit else history_messages
 
             for message in reversed(messages_to_show):
@@ -329,7 +330,7 @@ class LLMUtils:
 
         # prompt 只保留用户当前消息，使用 MessageUtils 确保图片被转述
         if hasattr(event, "message_obj") and hasattr(event.message_obj, "message"):
-            prompt = await MessageUtils.outline_message_list(event.message_obj.message, umo=umo)
+            prompt = await MessageUtils.outline_message_list(event.message_obj.message, umo=umo, ignore_images=ignore_images)
         else:
             prompt = event.get_message_outline()
 

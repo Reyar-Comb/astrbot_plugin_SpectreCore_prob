@@ -15,7 +15,7 @@ class MessageUtils:
     """
         
     @staticmethod
-    async def format_history_for_llm(history_messages: List[AstrBotMessage], max_messages: int = 20, umo: Optional[str] = None) -> str:
+    async def format_history_for_llm(history_messages: List[AstrBotMessage], max_messages: int = 20, umo: Optional[str] = None, ignore_images: bool = False) -> str:
         """
         将历史消息列表格式化为适合输入给大模型的文本格式
 
@@ -23,6 +23,7 @@ class MessageUtils:
             history_messages: 历史消息列表
             max_messages: 最大消息数量，默认20条
             umo: unified_msg_origin，用于 UMO 路由
+            ignore_images: 是否忽略图片内容
 
         Returns:
             格式化后的历史消息文本
@@ -55,7 +56,7 @@ class MessageUtils:
                     pass
             
             # 获取消息内容 (异步调用)
-            message_content = await MessageUtils.outline_message_list(msg.message, umo=umo) if hasattr(msg, "message") and msg.message else ""
+            message_content = await MessageUtils.outline_message_list(msg.message, umo=umo, ignore_images=ignore_images) if hasattr(msg, "message") and msg.message else ""
             
             # 格式化该条消息
             message_text = f"发送者: {sender_name} (ID: {sender_id})\n"
@@ -72,7 +73,7 @@ class MessageUtils:
         return formatted_text
            
     @staticmethod
-    async def outline_message_list(message_list: List[BaseMessageComponent], umo: Optional[str] = None) -> str:
+    async def outline_message_list(message_list: List[BaseMessageComponent], umo: Optional[str] = None, ignore_images: bool = False) -> str:
         """
         获取消息概要。
         使用类型检查而不是类实例检查，避免依赖不存在的类。
@@ -80,6 +81,7 @@ class MessageUtils:
         Args:
             message_list: 消息组件列表
             umo: unified_msg_origin，用于 UMO 路由
+            ignore_images: 是否忽略图片内容
         """
         outline = ""
         for i in message_list:
@@ -91,13 +93,16 @@ class MessageUtils:
                 
                 # 特别优化 Reply 组件的处理
                 if component_type == "reply" or isinstance(i, Reply):
-                    outline += await MessageUtils._format_reply_component(i, umo=umo)
+                    outline += await MessageUtils._format_reply_component(i, umo=umo, ignore_images=ignore_images)
                     continue
                 
                 # 根据类型处理不同的消息组件
                 elif component_type == "plain" or isinstance(i, Plain):
                     outline += i.text
                 elif component_type == "image" or isinstance(i, Image):
+                    if ignore_images:
+                        outline += "[图片]"
+                        continue
                     # 图片处理逻辑
                     try:
                         image = i.file if i.file else i.url
@@ -199,13 +204,14 @@ class MessageUtils:
         return outline
 
     @staticmethod
-    async def _format_reply_component(reply_component: Reply, umo: Optional[str] = None) -> str:
+    async def _format_reply_component(reply_component: Reply, umo: Optional[str] = None, ignore_images: bool = False) -> str:
         """
         优化格式化引用回复组件
 
         Args:
             reply_component: 回复组件
             umo: unified_msg_origin，用于 UMO 路由
+            ignore_images: 是否忽略图片内容
         """
         try:
             # 构建发送者信息
@@ -225,7 +231,7 @@ class MessageUtils:
             
             # 优先使用 chain（原始消息组件）
             if hasattr(reply_component, 'chain') and reply_component.chain:
-                reply_content = await MessageUtils.outline_message_list(reply_component.chain, umo=umo)
+                reply_content = await MessageUtils.outline_message_list(reply_component.chain, umo=umo, ignore_images=ignore_images)
             # 其次使用 message_str（纯文本消息）
             elif hasattr(reply_component, 'message_str') and reply_component.message_str:
                 reply_content = reply_component.message_str

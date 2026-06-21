@@ -288,6 +288,12 @@
         "description":"图片处理相关配置",
         "type":"object",
         "items":{
+            "ignore_images":{
+                "description":"忽略所有图片",
+                "type":"bool",
+                "hint":"开启后，包含图片的消息不会触发自动回复，调用大模型时也不会传入当前或历史图片",
+                "default":true
+            },
             "image_count":{
                 "description":"直接输入给大模型的图片数量",
                 "type":"int",
