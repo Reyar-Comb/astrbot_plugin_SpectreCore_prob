@@ -278,6 +278,8 @@ class LLMUtils:
         # 行为指引
         env_description += "\n(在聊天记录中，你的用户名以AstrBot被代替了)"
         env_description += "\n(如果你想回复某人，不要使用类似 [At:id(昵称)]这样的格式)"
+        env_description += "\n(除非别人明确提到了“爱丽丝”或明确在和你说话，否则当前话题大概率与你无关。不要擅自把话题、问句或代词的主语理解成你自己。)"
+        env_description += "\n(当你判断不需要回复时，必须只输出<NO_RESPONSE>，不要输出解释、标点或其它内容，这样程序才能识别为不做回复。)"
 
         if config.get("read_air", False):
             env_description += "\n\n现在你收到了一条新消息，你的反应是:\n(如果你想发送一条消息，直接输出发送的内容，如果你选择忽略，直接输出<NO_RESPONSE>)"
