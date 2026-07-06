@@ -4,7 +4,7 @@
 
 ![SpectreCore](https://avatars.githubusercontent.com/u/129108081?s=48&v=4)
 
-[![version](https://img.shields.io/badge/version-v2.1.12-blue.svg?style=flat-square)](https://github.com/23q3/astrbot_plugin_SpectreCore)
+[![version](https://img.shields.io/badge/version-v2.1.12-blue.svg?style=flat-square)](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-green.svg?style=flat-square)](LICENSE)
 [![author](https://img.shields.io/badge/author-23q3-orange.svg?style=flat-square)](https://github.com/23q3)
 
@@ -56,7 +56,7 @@ SpectreCore (影芯) 是一个为 AstrBot 设计的高级群聊互动插件，�
    或点击右下角加号，输入本插件仓库链接安装：
 
    ```
-   https://github.com/23q3/astrbot_plugin_SpectreCore
+   https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob
    ```
 
 3. 打开插件的配置界面，配置好相关选项，即可开始使用
@@ -72,7 +72,7 @@ SpectreCore (影芯) 是一个为 AstrBot 设计的高级群聊互动插件，�
 
 ### v2.1.12 (2026-06-01)
 
-- 🐛 **修复图片遗漏** - call_llm()遗漏当前消息图片导致模型无法读取用户上传的图片 [#96](https://github.com/23q3/astrbot_plugin_SpectreCore/issues/96)
+- 🐛 **修复图片遗漏** - call_llm()遗漏当前消息图片导致模型无法读取用户上传的图片 [#96](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob/issues/96)
 
 ## ⚠️ 注意事项
 
@@ -113,7 +113,7 @@ SpectreCore (影芯) 是一个为 AstrBot 设计的高级群聊互动插件，�
 
 欢迎提交 Issue 和 Pull Request 来帮助改进这个项目！
 
-[![contributors](https://contrib.rocks/image?repo=23q3/astrbot_plugin_SpectreCore)](https://github.com/23q3/astrbot_plugin_SpectreCore/graphs/contributors)
+[![contributors](https://contrib.rocks/image?repo=Reyar-Comb/astrbot_plugin_SpectreCore_prob)](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob/graphs/contributors)
 
 ## 📄 许可证
 
@@ -125,7 +125,7 @@ SpectreCore (影芯) 是一个为 AstrBot 设计的高级群聊互动插件，�
 
 <div align="center">
 
-**[SpectreCore (影芯)](https://github.com/23q3/astrbot_plugin_SpectreCore)** | Powered by [AstrBot](https://github.com/AstrBotDevs/AstrBot)
+**[SpectreCore (影芯)](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob)** | Powered by [AstrBot](https://github.com/AstrBotDevs/AstrBot)
 
 <sub>Made with ❤️ by [23q3](https://github.com/23q3)</sub>
 

@@ -4,11 +4,11 @@ from .utils import *
 import time
 
 @register(
-    "spectrecore",
-    "23q3",
+    "spectrecore_prob",
+    "Reyar-Comb",
     "使大模型更好的主动回复群聊中的消息，带来生动和沉浸的群聊对话体验",
     "2.1.12",
-    "https://github.com/23q3/astrbot_plugin_SpectreCore"
+    "https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob"
 )
 class SpectreCore(Star):
     """
@@ -134,7 +134,7 @@ class SpectreCore(Star):
         if platform_name in ("qq_official", "qq_official_webhook"):
             help_text += "\n强烈建议前往Github阅读README文档"
         else:
-            help_text += "\n↓强烈建议您阅读Github中的README文档↓\nhttps://github.com/23q3/astrbot_plugin_SpectreCore"
+            help_text += "\n↓强烈建议您阅读Github中的README文档↓\nhttps://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob"
         yield event.plain_result(help_text)
     @filter.permission_type(filter.PermissionType.ADMIN)
     @spectrecore.command("history")

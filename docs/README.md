@@ -12,14 +12,14 @@
 ## 快速链接
 
 - [返回主页](../README.md)
-- [GitHub 仓库](https://github.com/23q3/astrbot_plugin_SpectreCore)
-- [提交问题](https://github.com/23q3/astrbot_plugin_SpectreCore/issues)
+- [GitHub 仓库](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob)
+- [提交问题](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob/issues)
 - [AstrBot 官网](https://astrbot.app)
 
 ---
 
 <div align="center">
 
-**[SpectreCore (影芯)](https://github.com/23q3/astrbot_plugin_SpectreCore)** | Powered by [AstrBot](https://github.com/Soulter/AstrBot)
+**[SpectreCore (影芯)](https://github.com/Reyar-Comb/astrbot_plugin_SpectreCore_prob)** | Powered by [AstrBot](https://github.com/Soulter/AstrBot)
 
 </div> 
