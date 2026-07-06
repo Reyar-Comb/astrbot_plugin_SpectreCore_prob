@@ -232,6 +232,20 @@ class LLMUtils:
                         "请结合当前消息和聊天记录判断，不要强行把无关内容解释成同一个请求。"
                     )
 
+            sleep_context = ReplyDecision.get_sleep_context(event, config)
+            if sleep_context:
+                allow_no_response_for_context = True
+                sleep_config = config.get("sleep_mode", {})
+                sleep_prompt = sleep_config.get(
+                    "wakeup_prompt",
+                    "现在是睡眠时间，有人引用了你的睡眠回复“{sleep_reply}”把你叫醒。请判断当前消息是否是在认真叫醒你或延续相关请求；如果不是，请只输出{no_response_tag}。这个临时唤醒窗口结束后你会继续回到睡眠模式。"
+                )
+                sleep_prompt = "" if sleep_prompt is None else str(sleep_prompt)
+                sleep_prompt = sleep_prompt.replace("{sleep_reply}", str(sleep_context.get("sleep_reply", "zzz")))
+                sleep_prompt = sleep_prompt.replace("{no_response_tag}", "<NO_RESPONSE>")
+                if sleep_prompt.strip():
+                    env_description += f"\n{sleep_prompt.strip()}"
+
             smart_config = config.get("model_frequency", {}).get("smart_probability", {})
             bot_followup_window = int(smart_config.get("bot_followup_window_seconds", 180))
             bot_context = ReplyDecision.get_recent_bot_context(event, bot_followup_window)
@@ -278,8 +292,30 @@ class LLMUtils:
         # 行为指引
         env_description += "\n(在聊天记录中，你的用户名以AstrBot被代替了)"
         env_description += "\n(如果你想回复某人，不要使用类似 [At:id(昵称)]这样的格式)"
-        env_description += "\n(除非别人明确提到了“爱丽丝”或明确在和你说话，否则当前话题大概率与你无关。不要擅自把话题、问句或代词的主语理解成你自己。)"
-        env_description += "\n(当你判断不需要回复时，必须只输出<NO_RESPONSE>，不要输出解释、标点或其它内容，这样程序才能识别为不做回复。)"
+
+        guidance_config = config.get("llm_prompt_guidance", {})
+        mentioned_name = guidance_config.get("mentioned_name", "爱丽丝")
+        topic_relevance_prompt = guidance_config.get(
+            "topic_relevance_prompt",
+            "除非别人明确提到了“{name}”或明确在和你说话，否则当前话题大概率与你无关。不要擅自把话题、问句或代词的主语理解成你自己。"
+        )
+        no_response_prompt = guidance_config.get(
+            "no_response_prompt",
+            "当你判断不需要回复时，必须只输出{no_response_tag}，不要输出解释、标点或其它内容，这样程序才能识别为不做回复。"
+        )
+        prompt_vars = {
+            "{name}": str(mentioned_name),
+            "{no_response_tag}": "<NO_RESPONSE>",
+        }
+        topic_relevance_prompt = "" if topic_relevance_prompt is None else str(topic_relevance_prompt)
+        no_response_prompt = "" if no_response_prompt is None else str(no_response_prompt)
+        for key, value in prompt_vars.items():
+            topic_relevance_prompt = topic_relevance_prompt.replace(key, value)
+            no_response_prompt = no_response_prompt.replace(key, value)
+        if topic_relevance_prompt.strip():
+            env_description += f"\n({topic_relevance_prompt.strip()})"
+        if no_response_prompt.strip():
+            env_description += f"\n({no_response_prompt.strip()})"
 
         if config.get("read_air", False):
             env_description += "\n\n现在你收到了一条新消息，你的反应是:\n(如果你想发送一条消息，直接输出发送的内容，如果你选择忽略，直接输出<NO_RESPONSE>)"

@@ -49,6 +49,66 @@
         "hint":"开启后大模型会调用提供的函数工具",
         "default":false
     },
+    "llm_prompt_guidance":{
+        "description":"大模型回复行为提示词",
+        "type":"object",
+        "items":{
+            "mentioned_name":{
+                "type":"string",
+                "description":"明确提及时才视为相关的名字",
+                "hint":"用于判断群聊话题是否明确指向机器人，可在下方提示词中用{name}占位",
+                "default":"爱丽丝"
+            },
+            "topic_relevance_prompt":{
+                "type":"string",
+                "description":"话题相关性提示词",
+                "hint":"可使用{name}表示上方名字，提醒模型不要擅自把话题主语理解成自己",
+                "default":"除非别人明确提到了“{name}”或明确在和你说话，否则当前话题大概率与你无关。不要擅自把话题、问句或代词的主语理解成你自己。"
+            },
+            "no_response_prompt":{
+                "type":"string",
+                "description":"不回复格式提示词",
+                "hint":"可使用{no_response_tag}表示程序识别的不回复标记",
+                "default":"当你判断不需要回复时，必须只输出{no_response_tag}，不要输出解释、标点或其它内容，这样程序才能识别为不做回复。"
+            }
+        }
+    },
+    "sleep_mode":{
+        "description":"睡眠模式",
+        "type":"object",
+        "items":{
+            "enabled":{
+                "type":"bool",
+                "description":"启用睡眠模式",
+                "hint":"开启后，在配置的睡眠时间段内，普通消息会被忽略",
+                "default":false
+            },
+            "time_ranges":{
+                "type":"list",
+                "description":"睡眠时间段",
+                "hint":"可配置多个时间段，格式为HH:MM-HH:MM，支持跨天，例如23:30-08:00",
+                "default":[]
+            },
+            "sleep_reply":{
+                "type":"string",
+                "description":"睡眠回复词",
+                "hint":"睡眠时间内别人直接喊名字或@机器人时，不请求大模型，直接回复这段文本",
+                "default":"zzz"
+            },
+            "wakeup_window_seconds":{
+                "type":"int",
+                "description":"临时唤醒窗口秒数",
+                "hint":"用户引用睡眠回复词叫醒机器人后，同一用户后续消息会交给大模型判断的时间窗口",
+                "default":180
+            },
+            "wakeup_prompt":{
+                "type":"string",
+                "description":"睡眠唤醒提示词",
+                "hint":"可使用{sleep_reply}表示睡眠回复词，{no_response_tag}表示不回复标记",
+                "default":"现在是睡眠时间，有人引用了你的睡眠回复“{sleep_reply}”把你叫醒。请判断当前消息是否是在认真叫醒你或延续相关请求；如果不是，请只输出{no_response_tag}。这个临时唤醒窗口结束后你会继续回到睡眠模式。"
+            }
+        }
+    },
     "model_frequency":{
         "description":"决定调用模型回复的频率",
         "type":"object",

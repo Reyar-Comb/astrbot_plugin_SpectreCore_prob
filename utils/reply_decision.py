@@ -1,5 +1,6 @@
 from astrbot.api.all import *
 from typing import Dict, Any, List, Optional, Tuple
+from datetime import datetime
 import random
 import time
 from .llm_utils import LLMUtils
@@ -14,6 +15,7 @@ class ReplyDecision:
     _recent_messages: Dict[str, List[Tuple[float, str]]] = {}
     _recent_reply_times: Dict[str, List[float]] = {}
     _last_bot_messages: Dict[str, Dict[str, Any]] = {}
+    _sleep_wakeup_states: Dict[str, Dict[str, Any]] = {}
     _user_interactions: Dict[str, Dict[str, Dict[str, Any]]] = {}
     
     @staticmethod
@@ -48,6 +50,21 @@ class ReplyDecision:
             if config.get("image_processing", {}).get("ignore_images", True) and ReplyDecision._has_image(event):
                 logger.debug("消息中包含图片，已按配置忽略，不进行回复")
                 return False
+
+            if ReplyDecision._is_sleep_active(config):
+                if not ReplyDecision._is_chat_enabled_by_config(event, config):
+                    logger.debug("当前聊天未启用回复功能，睡眠模式不响应")
+                    return False
+                if ReplyDecision._get_sleep_wakeup_state(event):
+                    logger.debug("处于睡眠临时唤醒窗口内，允许大模型判断")
+                    return True
+                elif ReplyDecision._is_reply_to_sleep_message(event, config):
+                    ReplyDecision._set_sleep_wakeup_state(event, config)
+                    logger.debug("检测到用户引用睡眠回复，临时唤醒并交给大模型")
+                    return True
+                else:
+                    logger.debug("当前处于睡眠时间，普通消息不进行回复")
+                    return False
                 
             # 检查消息是否包含黑名单关键词
             blacklist_keywords = config.get("model_frequency", {}).get("blacklist_keywords", [])
@@ -65,6 +82,24 @@ class ReplyDecision:
                 ReplyDecision._remember_user_message(event)
             except Exception as e:
                 logger.debug(f"记录轻量消息状态失败: {e}")
+
+    @staticmethod
+    def get_sleep_direct_reply(event: AstrMessageEvent, config: AstrBotConfig) -> Optional[str]:
+        if not ReplyDecision._is_chat_enabled_by_config(event, config):
+            return None
+        if not ReplyDecision._is_sleep_active(config):
+            return None
+        if ReplyDecision._get_sleep_wakeup_state(event):
+            return None
+        if ReplyDecision._is_reply_to_sleep_message(event, config):
+            return None
+
+        sleep_config = config.get("sleep_mode", {})
+        message_text = event.get_message_outline() or ""
+        mentioned_name = config.get("llm_prompt_guidance", {}).get("mentioned_name", "爱丽丝")
+        if ReplyDecision._contains_any(message_text, [mentioned_name]) or ReplyDecision._is_at_bot(event):
+            return str(sleep_config.get("sleep_reply", "zzz"))
+        return None
     
     @staticmethod
     def _check_reply_rules(event: AstrMessageEvent, config: AstrBotConfig) -> bool:
@@ -84,29 +119,17 @@ class ReplyDecision:
                 logger.debug("未开启私聊回复功能")
                 return False
         else:
-            group_id = event.get_group_id()
-            if not group_id:
-                logger.debug("群聊ID为空，不进行回复")
+            chat_enabled, reason = ReplyDecision._is_chat_enabled_by_config(event, config, with_reason=True)
+            if not chat_enabled:
+                if reason == "empty_group":
+                    logger.debug("群聊ID为空，不进行回复")
+                elif reason == "blocked":
+                    logger.debug(f"群聊{event.get_group_id()}在黑名单中，不进行回复")
+                else:
+                    logger.debug(f"群聊{event.get_group_id()}未在白名单中，不进行回复")
                 return False
-            group_id = str(group_id).strip()
-
-            # 获取配置集合并规范化类型 (O(1) 查找)
-            blocked_groups = {str(g).strip() for g in config.get("blocked_groups", []) if str(g).strip()}
-            enabled_groups = {str(g).strip() for g in config.get("enabled_groups", []) if str(g).strip()}
-
-            # 1. 黑名单检查 - 最高优先级
-            if group_id in blocked_groups:
-                logger.debug(f"群聊{group_id}在黑名单中，不进行回复")
-                return False
-
-            # 2. 全局开关检查
             if config.get("enable_all_groups", False):
-                logger.debug(f"全局群聊回复已开启，允许回复群聊{group_id}")
-                # 继续执行下面的频率检查
-            elif group_id not in enabled_groups:
-                # 3. 白名单检查 (仅在全局开关关闭时)
-                logger.debug(f"群聊{group_id}未在白名单中，不进行回复")
-                return False
+                logger.debug(f"全局群聊回复已开启，允许回复群聊{event.get_group_id()}")
             
         # 获取消息频率配置
         frequency_config = config.get("model_frequency", {})
@@ -146,6 +169,28 @@ class ReplyDecision:
         # 可以在这里添加更多回复方法的判断逻辑
         
         return False
+
+    @staticmethod
+    def _is_chat_enabled_by_config(event: AstrMessageEvent, config: AstrBotConfig, with_reason: bool = False):
+        if event.is_private_chat():
+            enabled = config.get("enabled_private", False)
+            return (enabled, "private_disabled" if not enabled else "enabled") if with_reason else enabled
+
+        group_id = event.get_group_id()
+        if not group_id:
+            return (False, "empty_group") if with_reason else False
+
+        group_id = str(group_id).strip()
+        blocked_groups = {str(g).strip() for g in config.get("blocked_groups", []) if str(g).strip()}
+        enabled_groups = {str(g).strip() for g in config.get("enabled_groups", []) if str(g).strip()}
+
+        if group_id in blocked_groups:
+            return (False, "blocked") if with_reason else False
+        if config.get("enable_all_groups", False):
+            return (True, "enabled") if with_reason else True
+        if group_id in enabled_groups:
+            return (True, "enabled") if with_reason else True
+        return (False, "not_enabled") if with_reason else False
 
     @staticmethod
     def _check_smart_probability(event: AstrMessageEvent, config: AstrBotConfig, frequency_config: Dict[str, Any]) -> bool:
@@ -360,6 +405,136 @@ class ReplyDecision:
             if component_type == "image" or isinstance(component, Image):
                 return True
         return False
+
+    @staticmethod
+    def _is_sleep_active(config: AstrBotConfig) -> bool:
+        sleep_config = config.get("sleep_mode", {})
+        if not sleep_config.get("enabled", False):
+            return False
+
+        ranges = sleep_config.get("time_ranges", [])
+        if not ranges:
+            return False
+
+        now_minutes = datetime.now().hour * 60 + datetime.now().minute
+        for range_text in ranges:
+            parsed_range = ReplyDecision._parse_time_range(str(range_text))
+            if not parsed_range:
+                continue
+            start_minutes, end_minutes = parsed_range
+            if start_minutes == end_minutes:
+                return True
+            if start_minutes < end_minutes:
+                if start_minutes <= now_minutes < end_minutes:
+                    return True
+            elif now_minutes >= start_minutes or now_minutes < end_minutes:
+                return True
+        return False
+
+    @staticmethod
+    def _parse_time_range(range_text: str) -> Optional[Tuple[int, int]]:
+        if "-" not in range_text:
+            return None
+        start_text, end_text = [part.strip() for part in range_text.split("-", 1)]
+        start_minutes = ReplyDecision._parse_clock_minutes(start_text)
+        end_minutes = ReplyDecision._parse_clock_minutes(end_text)
+        if start_minutes is None or end_minutes is None:
+            logger.debug(f"睡眠时间段格式无效: {range_text}")
+            return None
+        return start_minutes, end_minutes
+
+    @staticmethod
+    def _parse_clock_minutes(clock_text: str) -> Optional[int]:
+        try:
+            hour_text, minute_text = clock_text.split(":", 1)
+            hour = int(hour_text)
+            minute = int(minute_text)
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return hour * 60 + minute
+        except (TypeError, ValueError):
+            pass
+        return None
+
+    @staticmethod
+    def _is_reply_to_sleep_message(event: AstrMessageEvent, config: AstrBotConfig) -> bool:
+        sleep_reply = str(config.get("sleep_mode", {}).get("sleep_reply", "zzz")).strip()
+        if not sleep_reply:
+            return False
+
+        message_obj = getattr(event, "message_obj", None)
+        message_chain = getattr(message_obj, "message", []) if message_obj else []
+        self_id = str(event.get_self_id() or "")
+        for component in message_chain:
+            component_type = getattr(component, "type", None) or component.__class__.__name__.lower()
+            if component_type != "reply" and not isinstance(component, Reply):
+                continue
+
+            sender_id = str(getattr(component, "sender_id", "") or "")
+            if sender_id and self_id and sender_id != self_id:
+                continue
+
+            reply_content = ReplyDecision._outline_reply_component_text(component)
+            if sleep_reply in reply_content:
+                return True
+
+            chat_key = ReplyDecision._get_chat_key(event)
+            last_bot_message = ReplyDecision._last_bot_messages.get(chat_key, {})
+            if str(last_bot_message.get("message_text", "")).strip() == sleep_reply:
+                return True
+        return False
+
+    @staticmethod
+    def _outline_reply_component_text(reply_component: Reply) -> str:
+        if hasattr(reply_component, "message_str") and reply_component.message_str:
+            return str(reply_component.message_str)
+        if hasattr(reply_component, "text") and reply_component.text:
+            return str(reply_component.text)
+        if hasattr(reply_component, "chain") and reply_component.chain:
+            return ReplyDecision._outline_text_chain(reply_component.chain)
+        return ""
+
+    @staticmethod
+    def _set_sleep_wakeup_state(event: AstrMessageEvent, config: AstrBotConfig) -> None:
+        sleep_config = config.get("sleep_mode", {})
+        chat_key = ReplyDecision._get_chat_key(event)
+        sender_id = str(event.get_sender_id() or "")
+        message_obj = getattr(event, "message_obj", None)
+        ReplyDecision._sleep_wakeup_states[chat_key] = {
+            "sender_id": sender_id,
+            "expires_at": time.time() + int(sleep_config.get("wakeup_window_seconds", 180)),
+            "message_text": event.get_message_outline() or "",
+            "message_id": getattr(message_obj, "message_id", None),
+            "created_at": time.time(),
+        }
+
+    @staticmethod
+    def _get_sleep_wakeup_state(event: AstrMessageEvent, now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        if event.is_private_chat():
+            return None
+        if now is None:
+            now = time.time()
+        chat_key = ReplyDecision._get_chat_key(event)
+        state = ReplyDecision._sleep_wakeup_states.get(chat_key)
+        if not state:
+            return None
+        if state.get("expires_at", 0) <= now:
+            ReplyDecision._sleep_wakeup_states.pop(chat_key, None)
+            return None
+        if state.get("sender_id") != str(event.get_sender_id() or ""):
+            return None
+        return state
+
+    @staticmethod
+    def get_sleep_context(event: AstrMessageEvent, config: AstrBotConfig) -> Optional[Dict[str, Any]]:
+        if not ReplyDecision._is_sleep_active(config):
+            return None
+        state = ReplyDecision._get_sleep_wakeup_state(event)
+        if not state:
+            return None
+        return {
+            **state,
+            "sleep_reply": str(config.get("sleep_mode", {}).get("sleep_reply", "zzz")),
+        }
 
     @staticmethod
     def _get_chat_key(event: AstrMessageEvent) -> str:

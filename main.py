@@ -52,6 +52,11 @@ class SpectreCore(Star):
         # 保存用户消息到历史记录
         await HistoryStorage.process_and_save_user_message(event)
 
+        sleep_reply = ReplyDecision.get_sleep_direct_reply(event, self.config)
+        if sleep_reply:
+            yield event.plain_result(sleep_reply)
+            return
+
         # 尝试自动回复
         if ReplyDecision.should_reply(event, self.config):
             async for result in ReplyDecision.process_and_reply(event, self.config, self.context):
