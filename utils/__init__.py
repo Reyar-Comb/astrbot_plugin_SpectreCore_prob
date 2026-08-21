@@ -5,6 +5,7 @@
 from .history_storage import HistoryStorage
 from .message_utils import MessageUtils
 from .image_caption import ImageCaptionUtils
+from .image_utils import ImageUtils
 from .llm_utils import LLMUtils
 from .persona_utils import PersonaUtils
 from .text_filter import TextFilter
@@ -14,8 +15,9 @@ __all__ = [
     "HistoryStorage",
     "MessageUtils",
     "ImageCaptionUtils",
+    "ImageUtils",
     "LLMUtils",
     "PersonaUtils",
     "TextFilter",
     "ReplyDecision"
-] 
+]

@@ -4,6 +4,7 @@ import time
 import threading
 from .history_storage import HistoryStorage
 from .message_utils import MessageUtils
+from .image_utils import ImageUtils
 from astrbot.core.provider.entites import ProviderRequest
 
 class LLMUtils:
@@ -327,7 +328,7 @@ class LLMUtils:
         # 将环境描述追加到 system_prompt
         system_prompt += env_description
 
-        # 图片相关处理
+        # 图片相关处理：统一转换成 base64://，避免跨服务器时误用 NapCat 本地文件名
         image_urls = []
 
         # 首先收集当前消息链中的图片（用户刚发送的，不受 image_count 限制）
@@ -335,32 +336,34 @@ class LLMUtils:
             for component in event.message_obj.message:
                 if isinstance(component, Image):
                     try:
-                        url = component.file or component.url
-                        if url and url not in image_urls:
-                            image_urls.append(url)
+                        base64_ref = await ImageUtils.to_base64_ref(component)
+                        if base64_ref and base64_ref not in image_urls:
+                            image_urls.append(base64_ref)
                     except Exception as e:
-                        logger.warning(f"处理当前消息图片URL时出错: {e}")
+                        logger.warning(f"处理当前消息图片时出错: {e}")
                         continue
 
         # 然后从历史消息中补充收集图片（受 image_count 限制）
         history_image_count = config.get("image_processing", {}).get("image_count", 0)
         if not ignore_images and history_image_count and history_messages:
             messages_to_show = history_messages[-history_limit:] if len(history_messages) > history_limit else history_messages
+            history_images_added = 0
 
             for message in reversed(messages_to_show):
                 if hasattr(message, "message") and message.message:
                     for component in message.message:
                         if isinstance(component, Image):
                             try:
-                                url = component.file or component.url
-                                if url and url not in image_urls:
-                                    image_urls.append(url)
-                                    if len(image_urls) >= history_image_count:
+                                base64_ref = await ImageUtils.to_base64_ref(component)
+                                if base64_ref and base64_ref not in image_urls:
+                                    image_urls.append(base64_ref)
+                                    history_images_added += 1
+                                    if history_images_added >= history_image_count:
                                         break
                             except Exception as e:
-                                logger.warning(f"处理历史消息图片URL时出错: {e}")
+                                logger.warning(f"处理历史消息图片时出错: {e}")
                                 continue
-                    if len(image_urls) >= history_image_count:
+                    if history_images_added >= history_image_count:
                         break
 
             if image_urls:

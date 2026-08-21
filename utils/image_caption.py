@@ -1,6 +1,9 @@
 from astrbot.api.all import *
 from typing import Optional
 import asyncio
+import hashlib
+
+from .image_utils import ImageUtils
 
 class ImageCaptionUtils:
     """
@@ -23,7 +26,7 @@ class ImageCaptionUtils:
     
     @staticmethod
     async def generate_image_caption(
-            image: str, # 图片的base64编码或URL
+            image: Image | str, # 图片组件、base64编码、URL或本地路径
             umo: Optional[str] = None, # unified_msg_origin，用于 UMO 路由
             timeout: int = 30
         ) -> Optional[str]:
@@ -31,18 +34,13 @@ class ImageCaptionUtils:
         为单张图片生成文字描述
 
         Args:
-            image: 图片的base64编码或URL
+            image: 图片组件、base64编码、URL或本地路径
             umo: unified_msg_origin，用于获取对应 UMO 的 provider
             timeout: 超时时间（秒）
 
         Returns:
             生成的图片描述文本，如果失败则返回None
         """
-        # 检查缓存
-        if image in ImageCaptionUtils.caption_cache:
-            logger.debug(f"命中图片描述缓存: {image[:50]}...")
-            return ImageCaptionUtils.caption_cache[image]
-            
         # 获取配置
         config = ImageCaptionUtils.config
         context = ImageCaptionUtils.context
@@ -55,6 +53,16 @@ class ImageCaptionUtils:
         image_processing_config = config.get("image_processing", {})
         if not image_processing_config.get("use_image_caption", False):
             return None
+
+        image_ref = await ImageUtils.to_base64_ref(image)
+        if not image_ref:
+            return None
+
+        # 不把体积很大的 Base64 本体长期作为字典键保存。
+        cache_key = hashlib.sha256(image_ref.encode("ascii")).hexdigest()
+        if cache_key in ImageCaptionUtils.caption_cache:
+            logger.debug(f"命中图片描述缓存: {cache_key[:12]}")
+            return ImageCaptionUtils.caption_cache[cache_key]
 
         provider_id = image_processing_config.get("image_caption_provider_id", "")
         # 获取提供商，支持 UMO 路由
@@ -74,7 +82,7 @@ class ImageCaptionUtils:
                 return await text_chat(
                     prompt=image_processing_config.get("image_caption_prompt", "请直接简短描述这张图片"),
                     contexts=[],
-                    image_urls=[image],
+                    image_urls=[image_ref],
                     func_tool=None,
                     system_prompt=""
                 )
@@ -85,8 +93,8 @@ class ImageCaptionUtils:
             
             # 缓存结果
             if caption:
-                 ImageCaptionUtils.caption_cache[image] = caption
-                 logger.debug(f"缓存图片描述: {image[:50]}... -> {caption}")
+                ImageCaptionUtils.caption_cache[cache_key] = caption
+                logger.debug(f"缓存图片描述: {cache_key[:12]} -> {caption}")
                  
             return caption
         except asyncio.TimeoutError:

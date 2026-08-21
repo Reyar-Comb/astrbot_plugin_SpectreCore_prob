@@ -1,10 +1,8 @@
 from astrbot.api.all import *
 from typing import List, Dict, Any, Optional
-import os
 import time
 from datetime import datetime
 from .image_caption import ImageCaptionUtils
-import asyncio
 import json
 import traceback
 
@@ -105,17 +103,8 @@ class MessageUtils:
                         continue
                     # 图片处理逻辑
                     try:
-                        image = i.file if i.file else i.url
-                        if image:
-                            if image.startswith("file:///"):
-                                image_path = image[8:]
-                                if not os.path.exists(image_path):
-                                    logger.warning(f"持久化图片文件不存在: {image_path}")
-                                    outline += f"[图片: 文件不存在]"
-                                    continue
-                                image = image_path
-
-                            caption = await ImageCaptionUtils.generate_image_caption(image, umo=umo)
+                        if i.file or i.url:
+                            caption = await ImageCaptionUtils.generate_image_caption(i, umo=umo)
                             if caption:
                                 outline += f"[图片: {caption}]"
                             else:
