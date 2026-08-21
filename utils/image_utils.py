@@ -1,13 +1,52 @@
 import base64
 import os
-from typing import Optional
+from typing import Iterable, Optional
 from urllib.parse import unquote
 
-from astrbot.api.all import Image, logger
+from astrbot.api.all import Image, Reply, logger
 
 
 class ImageUtils:
     """将 AstrBot 图片组件规范化为 Provider 可接受的 Base64 引用。"""
+
+    @staticmethod
+    def find_images(components: Optional[Iterable], _visited=None) -> list[Image]:
+        """递归提取消息链及 ``Reply.chain`` 中的图片组件。"""
+        if not components:
+            return []
+
+        visited = _visited if _visited is not None else set()
+        images = []
+        for component in components:
+            component_id = id(component)
+            if component_id in visited:
+                continue
+            visited.add(component_id)
+
+            component_type = getattr(component, "type", None)
+            class_name = component.__class__.__name__.lower()
+            if isinstance(component, Image) or component_type == "image" or class_name == "image":
+                images.append(component)
+                continue
+
+            if isinstance(component, Reply) or component_type == "reply" or class_name == "reply":
+                images.extend(
+                    ImageUtils.find_images(getattr(component, "chain", None), visited)
+                )
+        return images
+
+    @staticmethod
+    def find_reply_ids(components: Optional[Iterable]) -> list[str]:
+        """提取当前消息链中的引用消息 ID，用于空 ``Reply.chain`` 回退。"""
+        reply_ids = []
+        for component in components or []:
+            component_type = getattr(component, "type", None)
+            class_name = component.__class__.__name__.lower()
+            if isinstance(component, Reply) or component_type == "reply" or class_name == "reply":
+                reply_id = str(getattr(component, "id", "") or "").strip()
+                if reply_id and reply_id != "0" and reply_id not in reply_ids:
+                    reply_ids.append(reply_id)
+        return reply_ids
 
     @staticmethod
     def _existing_local_path(source: Optional[str]) -> Optional[str]:

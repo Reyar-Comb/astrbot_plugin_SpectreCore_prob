@@ -331,17 +331,31 @@ class LLMUtils:
         # 图片相关处理：统一转换成 base64://，避免跨服务器时误用 NapCat 本地文件名
         image_urls = []
 
-        # 首先收集当前消息链中的图片（用户刚发送的，不受 image_count 限制）
+        # 首先收集当前消息链及 Reply.chain 中的图片（不受 image_count 限制）
         if not ignore_images and hasattr(event, "message_obj") and hasattr(event.message_obj, "message"):
-            for component in event.message_obj.message:
-                if isinstance(component, Image):
-                    try:
-                        base64_ref = await ImageUtils.to_base64_ref(component)
-                        if base64_ref and base64_ref not in image_urls:
-                            image_urls.append(base64_ref)
-                    except Exception as e:
-                        logger.warning(f"处理当前消息图片时出错: {e}")
-                        continue
+            current_components = event.message_obj.message
+            current_images = ImageUtils.find_images(current_components)
+
+            # 部分平台只在 Reply 中给消息 ID，不附带 chain。此时从插件历史中
+            # 找到被引用消息，取出其中已经持久化的图片。
+            reply_ids = ImageUtils.find_reply_ids(current_components)
+            if reply_ids and history_messages:
+                history_by_id = {
+                    str(getattr(message, "message_id", "")): message
+                    for message in history_messages
+                    if getattr(message, "message_id", None) is not None
+                }
+                for reply_id in reply_ids:
+                    quoted_message = history_by_id.get(reply_id)
+                    if quoted_message is not None:
+                        current_images.extend(
+                            ImageUtils.find_images(getattr(quoted_message, "message", None))
+                        )
+
+            for component in current_images:
+                base64_ref = await ImageUtils.to_base64_ref(component)
+                if base64_ref and base64_ref not in image_urls:
+                    image_urls.append(base64_ref)
 
         # 然后从历史消息中补充收集图片（受 image_count 限制）
         history_image_count = config.get("image_processing", {}).get("image_count", 0)
@@ -351,18 +365,13 @@ class LLMUtils:
 
             for message in reversed(messages_to_show):
                 if hasattr(message, "message") and message.message:
-                    for component in message.message:
-                        if isinstance(component, Image):
-                            try:
-                                base64_ref = await ImageUtils.to_base64_ref(component)
-                                if base64_ref and base64_ref not in image_urls:
-                                    image_urls.append(base64_ref)
-                                    history_images_added += 1
-                                    if history_images_added >= history_image_count:
-                                        break
-                            except Exception as e:
-                                logger.warning(f"处理历史消息图片时出错: {e}")
-                                continue
+                    for component in ImageUtils.find_images(message.message):
+                        base64_ref = await ImageUtils.to_base64_ref(component)
+                        if base64_ref and base64_ref not in image_urls:
+                            image_urls.append(base64_ref)
+                            history_images_added += 1
+                            if history_images_added >= history_image_count:
+                                break
                     if history_images_added >= history_image_count:
                         break
 
